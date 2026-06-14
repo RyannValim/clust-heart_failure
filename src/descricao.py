@@ -49,7 +49,7 @@ def descrever_cluster(i=None):
 
         # cabeçalho só quando descreve todos
         if i is None:
-            print(f'===== CLUSTER {c} =====')
+            print(f'\n===== CLUSTER {c} =====')
 
         # print das numéricas desnormalizadas
         for col in cols_numericas:
