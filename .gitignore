@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Projeto: artefatos gerados
+models/*
+!models/.gitkeep
+plots/*
+!plots/.gitkeep

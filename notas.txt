@@ -1,0 +1,135 @@
+________________________________________________________________________________________________
+Tarefa: Treinar um sistema inteligente que receba os dados de um paciente desconhecido
+ e indicar a qual grupo esse paciente pertente (ou é similar).
+
+Heart Failure: https://archive.ics.uci.edu/dataset/519/heart+failure+clinical+records
+
+Os dados contem informações sobre pacientes de cardiologia.
+
+Deve-se:
+    a) Justificar a escolha do algoritmo:
+      - Algoritmo escolhido: KMeans (sklearn.cluster.KMeans)
+         Justificativa: a etapa de inferência exige .predict() para atribuir um
+         paciente novo a um cluster sem retreinar. DBSCAN e AgglomerativeClustering
+         não possuem .predict() no sklearn. KMeans possui, tornando a inferência
+         independente do retreino.
+
+      - Metaestimadores utilizados:
+         - Pipeline (sklearn.pipeline.Pipeline): encapsula preprocessador e
+            estimador em sequência. Definido pelo glossário sklearn como
+            metaestimador pois recebe outros estimadores como parâmetro.
+         - MinMaxScaler (sklearn.preprocessing.MinMaxScaler): normaliza os dados
+            numéricos para o intervalo [0, 1] antes do KMeans.
+    b) Demonstrar todos os procedimentos de pré processamento
+    c) Demonstrar a inferência funcionando
+
+Atenção: A base possui informações binárias que requerem que você analise melhor como
+ essas informações serão tratadas.
+________________________________________________________________________________________________
+Etapas da Clusterização:
+ - Carregamento — ler o CSV
+ - Tratamento — tratar dados (neste dataset não tem NA, mas você ainda separa/descarta colunas)
+ - Normalização — escalar os dados + salvar o scaler em .pkl
+ - Treinamento — calcular elbow para achar k ótimo, treinar KMeans, salvar modelo em .pkl
+ - Predição — preparar novo dado (normalizar com o scaler já treinado) e chamar .predict()
+ - Descrição — interpretar o cluster retornado via centróides desnormalizados
+________________________________________________________________________________________________
+Colunas numéricas para o scaler:
+ - age: mostra a idade do paciente em anos.
+ - creatinine_phosphokinase: enzima CPK no sangue - marcador da dano muscular/cardíaco.
+ - ejection_fraction: % de sangue que o coração ejeta por contração (abaixo de 40% é insuficiência).
+ - platelets: plaquetas no sangue.
+ - serum_creatinine: creatinina sérica - indicador de função renal.
+ - serum_sodium: sódio sérico - desequilíbrio indica retenção de líquido.
+
+Binárias:
+ - anaemia: baixa em células ou hemoglobinas vermelhas.
+ - diabetes: se o paciente tem diabetes.
+ - high_blood_pressure: se o paciente tem hipertensão.
+ - sex: homem ou mulher.
+ - smoking: se o paciente fuma ou não.
+
+Excluir:
+ - time: acompanhamento de estudo (dado não-clínico).
+ - DEATH_EVENT: target.
+
+O DATASET NÃO POSSUI COLUNAS FALTANTES, então não precisa de imputamento de dados.
+________________________________________________________________________________________________
+Sobre o treinamento:
+ - Silhouette Score compara, para cada ponto, a distância média até os outros pontos do seu próprio
+    cluster contra a distância média até os pontos do cluster vizinho mais próximo. Um valor próximo
+    de 1 significa que o ponto está bem alocado — longe dos outros clusters e próximo do seu. Próximo
+    de 0 significa que está na fronteira entre dois clusters. Negativo significa que provavelmente
+    foi alocado no cluster errado. Quanto maior, melhor.
+
+ - Calinski-Harabasz é uma razão: numerador é a dispersão entre clusters (quão distantes os centroides
+    estão uns dos outros), denominador é a dispersão dentro dos clusters (quão espalhados os pontos
+    estão dentro do seu cluster). Um K bom maximiza essa razão — clusters compactos e bem separados
+    entre si. Quanto maior, melhor.
+
+ - Davies-Bouldin para cada cluster calcula a similaridade dele com o cluster mais parecido — onde
+    similaridade é a soma dos raios dividida pela distância entre centroides. Um cluster compacto e
+    longe dos demais terá índice baixo. Quanto menor, melhor.
+
+Como usar a tabela na defesa: você não precisa que um único K ganhe nas três ao mesmo tempo — isso
+    raramente acontece. O argumento é: "K=X aparece como o melhor ou próximo do melhor na maioria
+    das métricas, e a elbow curve confirma esse joelho". Isso é suficiente para justificar a escolha.
+________________________________________________________________________________________________
+Justificativa do KMeans — por que não DBSCAN ou Agglomerative:: a etapa de inferência exige
+ .predict() para classificar um paciente novo. DBSCAN e AgglomerativeClustering não possuem
+ .predict() no sklearn — não conseguem classificar amostras fora do treino sem retreinar.
+ KMeans possui .predict(), tornando a inferência independente do retreino.
+
+Justificativa do tratamento das binárias: Binárias passam sem encoding adicional pois já estão
+ em 0/1 — encoding já foi feito pelo criador do dataset. OHE geraria dummy variable trap
+ (colunas perfeitamente opostas). LabelEncoder seria redundante. MinMaxScaler aplicado somente
+ nas numéricas para não distorcer os 0/1.
+
+Justificativa do range do elbow: Range do calc_elbow: range(1, 21) — testado até K=20.
+ O elbow curve apontou K=7, valor clinicamente razoável para
+ 299 pacientes (~42 pacientes por cluster em média).
+________________________________________________________________________________________________
+Justificando n_clusters=24:
+ - O dataset tem 11 features clínicas e cada paciente é uma combinação única delas. Com 5 features
+    binárias (anaemia, diabetes, high_blood_pressure, smoking + sex) você já tem 2⁵ = 32 combinações
+    possíveis só de condições clínicas — antes mesmo de considerar as variações nas numéricas 
+    (idade, creatinina, ejection fraction, etc). K=24 está dizendo que os dados naturalmente se
+    organizam em ~24 perfis clínicos distintos. Na prática isso faz sentido: um paciente idoso,
+    anêmico, hipertenso, não-diabético, não-fumante forma um perfil diferente de um paciente jovem,
+    diabético, sem anemia, fumante — e o KMeans encontrou 24 dessas combinações com densidade
+    suficiente nos 299 pacientes.
+
+ - Não é um número arbitrário — é o ponto onde o algoritmo consegue separar os perfis sem que os
+    clusters fiquem vazios ou se sobreponham demais. O cotovelo confirma que adicionar o 25º cluster
+    a partir desse ponto traz retorno marginal pequeno em termos de compressão de distância.
+    A interpretação prática: cada cluster representa um perfil de risco cardíaco — uma combinação
+    específica de condições comórbidas e marcadores laboratoriais. Um médico poderia, em tese, olhar
+    para o centróide do cluster e dizer "este grupo são pacientes de meia-idade com creatinina
+    elevada e sem hipertensão" — e tratar todos os pacientes desse cluster com protocolos similares.
+________________________________________________________________________________________________
+Sobre o tratamento de sex com OneHotEncoder:
+ - As 4 binárias (anaemia, diabetes, high_blood_pressure, smoking) são binárias booleanas
+    semânticas (Sim/Não), passam direto sem encoding.
+ - sex é uma binária NOMINAL (Masculino/Feminino), não booleana. O dataset já chega em 0/1
+    mas a semântica é nominal, não booleana. Por isso recebe tratamento separado com OHE
+    gerando sex_Masculino e sex_Feminino.
+ - Confirmação: dataset tem 194 ocorrências de sex=1 e 105 de sex=0. O paper original
+    (Chicco & Jurman, 2020) reporta 194 pacientes masculinos e 105 femininos.
+    Portanto 1=Masculino, 0=Feminino.
+________________________________________________________________________________________________
+Sobre as métricas de validação:
+ - Silhouette aponta K=25 como ótimo
+ - Davies-Bouldin aponta K=25 como ótimo
+ - Calinski-Harabasz aponta K=2 — comportamento conhecido em datasets sem clusters
+    naturalmente bem separados (K=2 maximiza a razão de dispersão em datasets contínuos
+    sobrepostos). Desconsiderado por ser inconsistente com as outras duas.
+ - calc_elbow com range(1, 101) retornou K=24 — convergência com Silhouette e Davies-Bouldin.
+ - Decisão final: K=24 pelo elbow curve (método ensinado em aula).
+________________________________________________________________________________________________
+Sobre o módulo de inferência:
+ - inferencia.py é um entry point independente que NÃO retreina o modelo.
+ - Carrega os .pkl salvos pelo main.py (KMeans, MinMaxScaler, OHE_Sex).
+ - Recebe um paciente sintético como lista, passa pelo mesmo pré-processamento do treino,
+    chama .predict() e mostra o perfil do cluster atribuído.
+ - Demonstrado funcionando para 7 pacientes sintéticos (clusters 0, 4, 9, 13, 21, 22, 23)
+    + 1 paciente personalizado que caiu no cluster 3.
